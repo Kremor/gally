@@ -6,13 +6,13 @@ class DB_Creator:
     def __init__(self, connection: Connection):
         cursor = connection.cursor()
 
-        cursor.execute("CREATE TABLE IF NOT EXISTS Cards (Id INT, Card TEXT, Banned Text)")
+        cursor.execute("CREATE TABLE IF NOT EXISTS Cards (Card TEXT, Banned Text)")
 
         cards = (
-            (1, 'bitter', 'sour#beer#lemon#feeling#orange'),
-            (2, 'bread', 'sandwich#bakery#flour#cheese'),
-            (3, 'chemical', 'biological weapon#kill#anthrax#gas#terror'),
-            (4, 'coat', 'outside#weather#raincold#anorak')
+            ('bitter', 'sour#beer#lemon#feeling#orange'),
+            ('bread', 'sandwich#bakery#flour#cheese'),
+            ('chemical', 'biological weapon#kill#anthrax#gas#terror'),
+            ('coat', 'outside#weather#raincold#anorak')
         )
 
         cursor.executemany("INSERT INTO Cards VALUES(?, ?, ?)", cards)
