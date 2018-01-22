@@ -8,9 +8,11 @@ At the beginning of each turn the bot will choose a clue giver from one team and
 
 The clue giver has to make their team guess the word on the card without using any of the taboo words. A word is guessed when one of the members of the team type the correct word on chat.
 
-At the same time the word watcher must attent that the clue giver don't use any of the taboo words, if that's the case, they could use the command `\buzz`to skip to the next card.
+At the same time the word watcher must attent that the clue giver don't use any of the taboo
+words, if that's the case, they could use the command `\buzz` to skip to the next card.
 
-At the end of each turn the clue giver's team recibes a point for each word guessed and the opposite team will recibe a point for each word skipped.
+At the end of each turn the clue giver's team receives a point for each word guessed and the
+opposite team will receive a point for each word skipped.
 
 The game ends when each player has been the clue giver once.
 
@@ -73,7 +75,7 @@ Usage:
 
 |===
 
-=== Miscellaneaus
+=== Miscellaneous
 
 [cols=".^1,2", width="90%"]
 |===
@@ -89,17 +91,11 @@ Usage:
 \addadmin @<admin>
 ----
 
-| `\setchannel \sc`
-a| *_Admins only_*. Sets the channel or channel to be used by the bot. The bot will only listen to those channels.
-
-Usage:
-
-----
-\setchannel #<channel 1> #<channel 2> ...
-----
-
 | `\listadmins \la`
 | *_Admins only_*. List all the administrators.
+
+| `\listconf \lc`
+| *_Admins only_*. Lists the server configuration.
 
 | `\help`
 | Shows a small description of what each command does.
@@ -109,6 +105,15 @@ Usage:
 
 |  `\repo`
 | Posts a link to the bot's git repository.
+
+| `\setchannel \sc`
+a| *_Admins only_*. Sets the channel or channel to be used by the bot. The bot will only listen to those channels.
+
+Usage:
+
+----
+\setchannel #<channel 1> #<channel 2> ...
+----
 
 | `\setrounds \sr`
 a| *_Adminds only_*. Sets the number of rounds per game (default is 1). This variable is global and will be applied to all the games.
