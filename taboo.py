@@ -1,46 +1,52 @@
-import sqlite3
-import time
-
-from create_db import DB_Creator
-
 class Taboo:
 
-    __data = {}
+    def __init__(self, server_id: str):
+        self.players = []
+        self.team_a = True
+        self.playing = False
+        self.turns = []
 
-    def __init__(self):
+    def add_player(self, player: str):
+        if self.playing:
+            return TabooResult(False, "Can't add players while a game is taking place.")
+        elif player in self.players:
+            return TabooResult(False, "Player is already in the game.")
+        else:
+            self.players.append(player)
+            return TabooResult(True, "Player added.")
 
-        connection = sqlite3.connect('cards.db')
-
-        DB_Creator(connection)
-
-        connection.commit()
-        connection.close()
-
-    def add_card(self, card: str, banned: str):
+    def next_turn(self):
         pass
 
-    def add_team(self, server_id, team_name: str, players):
-        if server_id not in self.__data:
-            self.new_game(server_id)
-        game = self.__data[server_id]
-        if team_name not in game:
-            game[team_name] = 0
+    def remove_player(self, player):
+        if self.playing:
+            return TabooResult(False, "Can't remove players while a game is taking place.")
+        elif player not in self.players:
+            return TabooResult(False, "Player is not in the game.")
+        else:
+            self.players.remove(player)
+            return TabooResult(True, "Player removed.")
 
-    def update_score(self, server_id, team_name):
+    def skip_card(self):
         pass
 
-    def new_game(self, server_id):
-        self.__data[server_id] = {}
-
-    def remove_card_by_id(self, id: int):
-        pass
-
-    def remove_card_by_name(self, card: str):
+    def skip_player(self):
         pass
 
     def start(self):
-        pass
+        if self.playing:
+            return TabooResult(False, "The game already started.")
+        elif len(self.players) < 4:
+            return TabooResult(False, "Need at least 4 players to start the game.")
+        else:
+            pass
 
-    def stop(self, server_id):
-        if server_id in self.__data:
-            del self.__data[server_id]
+    def stop(self):
+        if self.playing:
+            self.playing = False
+
+
+class TabooResult:
+    def __init__(self, success: bool, message: str):
+        self.success = success
+        self.message = message
