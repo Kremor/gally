@@ -1,8 +1,12 @@
+import random
+
+
 class Taboo:
 
     def __init__(self, server_id: str):
         self.players = []
-        self.team_a = True
+        self.team_a = 0
+        self.team_b = 0
         self.playing = False
         self.turns = []
 
@@ -13,16 +17,16 @@ class Taboo:
             return TabooResult(False, "Player is already in the game.")
         else:
             self.players.append(player)
-            return TabooResult(True, "Player added.")
+            return TabooResult(True, "<@{}> was added to the game.".format(player))
 
     def next_turn(self):
         pass
 
-    def remove_player(self, player):
+    def remove_player(self, player: str):
         if self.playing:
-            return TabooResult(False, "Can't remove players while a game is taking place.")
+            return TabooResult(False, "Can't remove players when a game is taking place.")
         elif player not in self.players:
-            return TabooResult(False, "Player is not in the game.")
+            return TabooResult(False, "<@{}> is not in the game.".format(player))
         else:
             self.players.remove(player)
             return TabooResult(True, "Player removed.")
@@ -39,7 +43,19 @@ class Taboo:
         elif len(self.players) < 4:
             return TabooResult(False, "Need at least 4 players to start the game.")
         else:
-            pass
+            random.shuffle(self.players)
+            team_a = "+ Team A\n" + '-' * 20
+            team_b = "+ Team B\n" + '-' * 20
+
+            for i, player in self.players:
+                if (i+1) % 2 == 1:
+                    team_a += '\n' + '- ' + '<@{}>'.format(player)
+                else:
+                    team_b += '\n' + '- ' + '<@{}>'.format(player)
+
+            self.playing = True
+
+            return "=== GAME STARTED ===\n" + team_a + '\n' + team_b
 
     def stop(self):
         if self.playing:
