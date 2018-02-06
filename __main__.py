@@ -1,5 +1,8 @@
 import argparse
+from os import path
+import queue
 import re
+import shutil
 import sqlite3
 
 from discord.ext import commands
@@ -9,47 +12,16 @@ from taboo import Taboo
 bot = commands.Bot('\\')
 
 games = {}
+queues = {}
 
 __owner_id = ''
 
 
 @bot.event()
 async def on_ready():
-    connection = sqlite3.connect('db/database.db')
-    cursor = connection.cursor()
-
     for server in bot.servers:
-        cursor.execute("create table if not exists admins_{} (id text)".format(
-            server.id
-        ))
-        cursor.execute(
-            "create unique index idx_admins_{0}_id on admins_{0}(id)".format(server.id)
-        )
-
-        cursor.execute("create table if not exists cards_{} (card text, taboo text)".format(
-            server.id
-        ))
-        cursor.execute("create unique index idx_cards_{0}_card on cards_{0}(card)".format(
-            server.id
-        ))
-
-        cursor.execute("create table if not exists settings_{} (setting text, value text)".format(
-            server.id
-        ))
-        cursor.execute("create unique index idx_settings_{0}_setting on settings_{0}("
-                       "setting)".format(server.id))
-
-        cursor.execute("insert into settings_{0}(name, value) select '{1}', '{2}' where not "
-                       "exists (select 1 from settings_{0} where name='{1}')".format(
-                        server, 'rounds', '1'))
-        cursor.execute("insert into settings_{0}(name, value) select '{1}', '{2}' where not "
-                       "exists (select 1 from settings_{0} where name='{1}')".format(
-                        server, 'seconds', '120'))
-
-
-    cursor.close()
-    connection.commit()
-    connection.close()
+        if not path.exists('db/{}.db'.format(server.id)):
+            shutil.copy2('database.db', 'db/{}.db'.format(server.id))
 
 
 """ ---... Cards management ...--- """
@@ -62,15 +34,53 @@ async def add_card(context, *args):
     elif len(args) < 5:
         await bot.say("You need at least 4 taboo words to add a new card.")
     else:
-        await bot.say("""
-        Card added:\n```diff\n+ {}\n--------------------\n{}\n```
-        """.format(args[0].upper(), '- ' + '\n- '.join(args[1:]).upper())
-        )
+        card = args[0].upper().strip()
+        taboo = [str(word).upper().strip() for word in args[1:]]
+        server_id = context.message.server.id
+
+        connection = sqlite3.connect('{}.db'.format(server_id))
+        cursor = connection.cursor()
+
+        cursor.execute("select card from cards where card like '{}'".format(card))
+        if not cursor.fetchall():
+            await bot.say("The card {} already exists in the database".format(card))
+        else:
+            cursor.execute("insert into cards values({}, {})".format(card, '|'.join(taboo)))
+            await bot.say("""
+            Card added:\n```diff\n+ {}\n--------------------\n{}\n```
+            """.format(card, '- ' + '\n- '.join(taboo))
+            )
+
+        cursor.close()
+        connection.commit()
+        connection.close()
 
 
 @bot.command(name='removecard', aliases=['rc'], pass_context=True)
 async def remove_card(context, *args):
-    pass
+    if len(args) < 1:
+        await bot.say("")
+    else:
+        card = args[0].upper().strip()
+        server_id = context.message.server.id
+
+        connection = sqlite3.connect('{}.db'.format(server_id))
+        cursor = connection.cursor()
+
+        cursor.execute("select card from cards where card like '{}'".format(card))
+
+        if not cursor.fetchone():
+            await bot.say("The card {} does not exists in the database.".format(card))
+        else:
+            cursor.execute("select taboo from cards where card like '{}'".format(card))
+            taboo = cursor.fetchone()[0]
+            cursor.execute("delete from cards where card like '{}'".format(card))
+            await bot.say("The card:\n```\n+ {}\n{}\n{}\n```".format(
+                card, '-' * 20, '\n- '.join(taboo.split('|'))))
+
+        cursor.close()
+        connection.commit()
+        connection.close()
 
 
 """ ---... Taboo Game ...--- """
@@ -115,7 +125,9 @@ async def taboo(context):
     taboo_game = None if server_id not in games else games[server_id]
 
     if not taboo_game:
-        taboo_game = Taboo()
+        games[server_id] = Taboo()
+        queues[server_id] = queue.Queue()
+
         await bot.say("""
         Game created. The game will start in 5 minutes.
             Type `\\join` to join the game.
@@ -124,8 +136,6 @@ async def taboo(context):
         await bot.say("Can't start a new game when there's one taking place.")
     else:
         await bot.say("A game was already created and will start soon.")
-
-    games[server_id] = taboo_game
 
 
 """ ---... Miscellaneous ...--- """
@@ -136,7 +146,6 @@ async def add_admin(context):
     author = context.message.author.id
     mentions = context.message.mentions
     server_id = context.message.server.id
-    is_admin = False
 
     if not len(mentions):
         await bot.say('No arguments passed after the command')
@@ -144,12 +153,7 @@ async def add_admin(context):
 
     admins = __get_admins(server_id)
 
-    for admin in admins:
-        if author == admin:
-            is_admin = True
-            break
-
-    if is_admin:
+    if author in admins:
         if mentions[0].id not in admins:
             __add_admin(server_id, mentions[0].id)
             await bot.say("{} is now an admin.".format(mentions[0].mention))
@@ -171,7 +175,7 @@ async def list_admins(context):
         await bot.say("Admins:\n" + text)
 
 
-@bot.command(name='listcon', aliases=['lc'], pass_context=True)
+@bot.command(name='listconf', aliases=['lc'], pass_context=True)
 async def list_conf(context):
     pass
 
@@ -226,12 +230,10 @@ async def set_timer(context, *args):
 
 
 def __add_admin(server_id: str, admin_id: str):
-    connection = sqlite3.connect('db/database.db')
+    connection = sqlite3.connect('db/{}.db'.format(server_id))
     cursor = connection.cursor()
 
-    cursor.execute("insert into admins_{} values({})".format(
-        server_id, admin_id
-    ))
+    cursor.execute("insert into admins values({})".format(admin_id))
 
     cursor.close()
     connection.commit()
@@ -241,10 +243,10 @@ def __add_admin(server_id: str, admin_id: str):
 def __get_admins(server_id: str) -> list:
     global __owner_id
 
-    connection = sqlite3.connect('db/database.db')
+    connection = sqlite3.connect('db/{}.db'.format(server_id))
     cursor = connection.cursor()
 
-    cursor.execute("select * from admins_{}".format(server_id))
+    cursor.execute("select * from admins".format(server_id))
 
     admins = [__owner_id] + [admin[0] for admin in cursor.fetchall()]
 
@@ -255,12 +257,10 @@ def __get_admins(server_id: str) -> list:
 
 
 def __remove_admin(server_id: str, admin_id: str):
-    connection = sqlite3.connect('db/database.db')
+    connection = sqlite3.connect('db/{}.db'.format(server_id))
     cursor = connection.cursor()
 
-    cursor.execute("remove from admins_{} where id like'{}'".format(
-        server_id, admin_id
-    ))
+    cursor.execute("remove from admins where id like'{}'".format(admin_id))
 
     cursor.close()
     connection.commit()
@@ -268,12 +268,10 @@ def __remove_admin(server_id: str, admin_id: str):
 
 
 def __add_card(server_id: str, card: str, taboos: str):
-    connection = sqlite3.connect('db/database.db')
+    connection = sqlite3.connect('db/{}.db'.format(server_id))
     cursor = connection.cursor()
 
-    cursor.execute("insert into cards_{} values({}, {})".format(
-        server_id, card, taboos
-    ))
+    cursor.execute("insert into cards values({}, {})".format(card, taboos))
 
     cursor.close()
     connection.commit()
@@ -281,10 +279,10 @@ def __add_card(server_id: str, card: str, taboos: str):
 
 
 def __get_cards(server_id: str) -> list:
-    connection = sqlite3.connect('db/database.db')
+    connection = sqlite3.connect('db/{}.db'.format(server_id))
     cursor = connection.cursor()
 
-    cursor.execute("select * from cards_{}".format(server_id))
+    cursor.execute("select * from cards".format(server_id))
 
     cards = list(cursor.fetchall())
 
@@ -295,12 +293,10 @@ def __get_cards(server_id: str) -> list:
 
 
 def __remove_card(server_id: str, card: str):
-    connection = sqlite3.connect('db/database.db')
+    connection = sqlite3.connect('db/{}.db'.format(server_id))
     cursor = connection.cursor()
 
-    cursor.execute("remove from cards_{} where card like'{}'".format(
-        server_id, card
-    ))
+    cursor.execute("remove from cards where card like'{}'".format(card))
 
     cursor.close()
     connection.commit()
@@ -308,12 +304,10 @@ def __remove_card(server_id: str, card: str):
 
 
 def __get_setting(server_id: str, setting: str) -> str:
-    connection = sqlite3.connect('db/database.db')
+    connection = sqlite3.connect('db/{}.db'.format(server_id))
     cursor = connection.cursor()
 
-    cursor.execute("select value from settings_{} where setting like '{}'".format(
-        server_id, setting
-    ))
+    cursor.execute("select value from settings where setting like '{}'".format(setting))
 
     value = cursor.fetchone()[0]
 
@@ -324,11 +318,11 @@ def __get_setting(server_id: str, setting: str) -> str:
 
 
 def __set_setting(server_id: str, setting: str, value: str):
-    connection = sqlite3.connect('db/database.db')
+    connection = sqlite3.connect('db/{}.db'.format(server_id))
     cursor = connection.cursor()
 
-    cursor.execute("select value from settings_{} where setting like '{}'".format(
-        server_id, setting
+    cursor.execute("replace into settings (setting, value) values('{}', '{}')".format(
+        setting, value
     ))
 
     cursor.close()
