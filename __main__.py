@@ -17,7 +17,7 @@ queues = {}
 __owner_id = ''
 
 
-@bot.event()
+@bot.event
 async def on_ready():
     for server in bot.servers:
         if not path.exists('db/{}.db'.format(server.id)):
@@ -197,7 +197,6 @@ async def remove_admin(context):
     author = context.message.author.id
     mentions = context.message.mentions
     server_id = context.message.server.id
-    is_admin = False
 
     if not len(mentions):
         await bot.say('No arguments passed after the command')
@@ -205,12 +204,7 @@ async def remove_admin(context):
 
     admins = __get_admins(server_id)
 
-    for admin in admins:
-        if author == admin:
-            is_admin = True
-            break
-
-    if is_admin:
+    if author in admins:
         if mentions[0].id not in admins:
             await bot.say("{} is not an admin.".format(mentions[0].mention))
         else:
@@ -260,16 +254,14 @@ async def set_rounds(context, *args):
 
     if not __is_number(args[0]):
         await bot.say("Argument must be a number.")
+        return
 
-    channel_mentions = context.message.channel_mentions
-    if not len(channel_mentions):
-        await bot.say("No channel passed as argument.")
+    if int(args[0]) < 1:
+        await bot.say("You need at lest 1 round to play the game.")
         return
 
     __set_setting(server_id, 'ROUNDS', args[0])
-    await bot.say("The bot will listen to the channel {} when playing taboo.".format(
-        channel_mentions[0].mention
-    ))
+    await bot.say("Setting updated. A game will finish after {} rounds.".format(args[0]))
 
 
 @bot.command(name='settimer', aliases=['st'], pass_context=True)
@@ -288,16 +280,14 @@ async def set_timer(context, *args):
 
     if not __is_number(args[0]):
         await bot.say("Argument must be a number.")
+        return
 
-    channel_mentions = context.message.channel_mentions
-    if not len(channel_mentions):
-        await bot.say("No channel passed as argument.")
+    if int(args[0]) < 60:
+        await bot.say("Turns must be at least 60 seconds long.")
         return
 
     __set_setting(server_id, 'SECONDS', args[0])
-    await bot.say("The bot will listen to the channel {} when playing taboo.".format(
-        channel_mentions[0].mention
-    ))
+    await bot.say("Setting updated. A turn will finish after {} seconds.".format(args[0]))
 
 
 """ ---... UTILITY ...--- """
@@ -334,7 +324,7 @@ def __remove_admin(server_id: str, admin_id: str):
     connection = sqlite3.connect('db/{}.db'.format(server_id))
     cursor = connection.cursor()
 
-    cursor.execute("remove from admins where id like'{}'".format(admin_id))
+    cursor.execute("delete from admins where id like '{}'".format(admin_id))
 
     cursor.close()
     connection.commit()
@@ -370,7 +360,7 @@ def __remove_card(server_id: str, card: str):
     connection = sqlite3.connect('db/{}.db'.format(server_id))
     cursor = connection.cursor()
 
-    cursor.execute("remove from cards where card like'{}'".format(card))
+    cursor.execute("delete from cards where card like '{}'".format(card))
 
     cursor.close()
     connection.commit()
