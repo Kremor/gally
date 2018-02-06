@@ -177,7 +177,19 @@ async def list_admins(context):
 
 @bot.command(name='listconf', aliases=['lc'], pass_context=True)
 async def list_conf(context):
-    pass
+    server_id = context.message.server.id
+    connection = sqlite3.connect('db/{}.db'.format(server_id))
+    cursor = connection.cursor()
+
+    cursor.execute("select * from settings")
+    settings = cursor.fetchall()
+    string = "```"
+
+    for setting, value in settings:
+        string += '\n{}\t-\t{}'.format(setting, value)
+    string += '\n```'
+
+    await bot.say(string)
 
 
 @bot.command(name='removeadmin', aliases=['ra'], pass_context=True)
@@ -213,17 +225,79 @@ async def repo():
 
 @bot.command(name='setchannel', aliases=['sc'], pass_context=True)
 async def set_channel(context):
-    pass
+    author_id = context.message.author.id
+    server_id = context.message.server.id
+
+    admins = __get_admins(server_id)
+
+    if author_id not in admins:
+        return
+
+    channel_mentions = context.message.channel_mentions
+    if not len(channel_mentions):
+        await bot.say("No channel passed as argument.")
+        return
+
+    __set_setting(server_id, 'CHANNEL', channel_mentions[0].id)
+    await bot.say("The bot will listen to the channel {} when playing taboo.".format(
+        channel_mentions[0].mention
+    ))
 
 
 @bot.command(name='setrounds', aliases=['sr'], pass_context=True)
 async def set_rounds(context, *args):
-    pass
+    author_id = context.message.author.id
+    server_id = context.message.server.id
+
+    admins = __get_admins(server_id)
+
+    if author_id not in admins:
+        return
+
+    if not len(args):
+        await bot.say("No arguments were passed to the command.")
+        return
+
+    if not __is_number(args[0]):
+        await bot.say("Argument must be a number.")
+
+    channel_mentions = context.message.channel_mentions
+    if not len(channel_mentions):
+        await bot.say("No channel passed as argument.")
+        return
+
+    __set_setting(server_id, 'ROUNDS', args[0])
+    await bot.say("The bot will listen to the channel {} when playing taboo.".format(
+        channel_mentions[0].mention
+    ))
 
 
 @bot.command(name='settimer', aliases=['st'], pass_context=True)
 async def set_timer(context, *args):
-    pass
+    author_id = context.message.author.id
+    server_id = context.message.server.id
+
+    admins = __get_admins(server_id)
+
+    if author_id not in admins:
+        return
+
+    if not len(args):
+        await bot.say("No arguments were passed to the command.")
+        return
+
+    if not __is_number(args[0]):
+        await bot.say("Argument must be a number.")
+
+    channel_mentions = context.message.channel_mentions
+    if not len(channel_mentions):
+        await bot.say("No channel passed as argument.")
+        return
+
+    __set_setting(server_id, 'SECONDS', args[0])
+    await bot.say("The bot will listen to the channel {} when playing taboo.".format(
+        channel_mentions[0].mention
+    ))
 
 
 """ ---... UTILITY ...--- """
@@ -332,6 +406,7 @@ def __set_setting(server_id: str, setting: str, value: str):
 
 __user_id = re.compile(r'\d{17}')
 __c_s_id = re.compile(r'\d{18}')
+__number = re.compile(r'\d+')
 __token = re.compile(r'[0-9a-zA-Z._-]{57}')
 
 
@@ -343,6 +418,12 @@ def __is_user_id(id: str):
 
 def __is_c_s_id(id: str):
     if re.fullmatch(__c_s_id, id):
+        return True
+    return False
+
+
+def __is_number(n: str):
+    if re.fullmatch(__number, n):
         return True
     return False
 
