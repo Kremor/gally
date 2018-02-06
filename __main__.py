@@ -35,20 +35,20 @@ async def add_card(context, *args):
         await bot.say("You need at least 4 taboo words to add a new card.")
     else:
         card = args[0].upper().strip()
-        taboo = [str(word).upper().strip() for word in args[1:]]
+        taboo_ = [str(word).upper().strip() for word in args[1:]]
         server_id = context.message.server.id
 
-        connection = sqlite3.connect('{}.db'.format(server_id))
+        connection = sqlite3.connect('db/{}.db'.format(server_id))
         cursor = connection.cursor()
 
         cursor.execute("select card from cards where card like '{}'".format(card))
-        if not cursor.fetchall():
+        if cursor.fetchone() is not None:
             await bot.say("The card {} already exists in the database".format(card))
         else:
-            cursor.execute("insert into cards values({}, {})".format(card, '|'.join(taboo)))
+            cursor.execute("insert into cards values('{}', '{}')".format(card, '|'.join(taboo_)))
             await bot.say("""
-            Card added:\n```diff\n+ {}\n--------------------\n{}\n```
-            """.format(card, '- ' + '\n- '.join(taboo))
+            Card added:\n```diff\n+ {}\n{}\n- {}\n```
+            """.format(card, '-'*20, '\n- '.join(taboo_))
             )
 
         cursor.close()
@@ -56,31 +56,80 @@ async def add_card(context, *args):
         connection.close()
 
 
-@bot.command(name='removecard', aliases=['rc'], pass_context=True)
-async def remove_card(context, *args):
+@bot.command(name='delcard', aliases=['dc'], pass_context=True)
+async def del_card(context, *args):
     if len(args) < 1:
-        await bot.say("")
+        await bot.say("No arguments passed.")
     else:
         card = args[0].upper().strip()
         server_id = context.message.server.id
 
-        connection = sqlite3.connect('{}.db'.format(server_id))
+        connection = sqlite3.connect('db/{}.db'.format(server_id))
         cursor = connection.cursor()
 
-        cursor.execute("select card from cards where card like '{}'".format(card))
+        cursor.execute("select taboo from cards where card like '{}'".format(card))
+        taboo_ = cursor.fetchone()
+        taboo_ = taboo_[0] if taboo_ else None
 
-        if not cursor.fetchone():
-            await bot.say("The card {} does not exists in the database.".format(card))
-        else:
-            cursor.execute("select taboo from cards where card like '{}'".format(card))
-            taboo = cursor.fetchone()[0]
+        if taboo_:
             cursor.execute("delete from cards where card like '{}'".format(card))
-            await bot.say("The card:\n```\n+ {}\n{}\n{}\n```".format(
-                card, '-' * 20, '\n- '.join(taboo.split('|'))))
+            await bot.say("The card:\n```diff\n+ {}\n{}\n- {}\n```\nwas removed from the "
+                          "database.".format(card, '-' * 20, '\n- '.join(taboo_.split('|'))))
+        else:
+            await bot.say("The card {} does not exists in the database.".format(card))
 
         cursor.close()
         connection.commit()
         connection.close()
+
+
+@bot.command(name='replcard', aliases=['rc'], pass_context=True)
+async def replace_card(context, *args):
+    if len(args) == 0:
+        await bot.say("No arguments passed.")
+    elif len(args) < 5:
+        await bot.say("You need at least 4 taboo words to add a new card.")
+    else:
+        card = args[0].upper().strip()
+        taboo_ = [word.upper().strip() for word in args[1:]]
+        server_id = context.message.server.id
+
+        connection = sqlite3.connect('db/{}.db'.format(server_id))
+        cursor = connection.cursor()
+
+        cursor.execute("replace into cards (card, taboo) values('{}', '{}')".format(card, '|'.join(
+            taboo_)))
+        await bot.say("""
+        Card added:\n```diff\n+ {}\n{}\n- {}\n```
+        """.format(card, '-'*20, '\n- '.join(taboo_))
+        )
+
+        cursor.close()
+        connection.commit()
+        connection.close()
+
+
+@bot.command(name='showcard', aliases=['c'], pass_context=True)
+async def show_card(context, *args):
+    if len(args) < 1:
+        await bot.say("No arguments passed.")
+    else:
+        card = args[0].upper().strip()
+        server_id = context.message.server.id
+
+        connection = sqlite3.connect('db/{}.db'.format(server_id))
+        cursor = connection.cursor()
+
+        cursor.execute("select taboo from cards where card like '{}'".format(card))
+        taboo_ = cursor.fetchone()
+        taboo_ = taboo_[0] if taboo_ else None
+
+        if taboo_:
+            await bot.say("```diff\n+ {}\n{}\n- {}```".format(
+                card, '-'*20, '\n- '.join(taboo_.split('|'))
+            ))
+        else:
+            await bot.say("The card {} does not exists in the database.".format(card))
 
 
 """ ---... Taboo Game ...--- """

@@ -64,13 +64,31 @@ Usage:
 \addcard <word> <taboo word 1> <taboo word 2> ...
 ----
 
-| `\removecard \rc`
+| `\delcard \dc`
 a| Removes a card from the deck.
 
 Usage:
 
 ----
-\removecard <word>
+\delcard <word>
+----
+
+| `\replcard \rc`
+a| Replaces a card from the database, if the card does not exist it is added instead.
+
+Usage:
+
+----
+\replcard <word> <taboo word 1> <taboo word 2> ...
+----
+
+| `\showcard \c`
+a| Shows a card as it is in the database.
+
+Usage:
+
+----
+\showcard <word>
 ----
 
 |===
