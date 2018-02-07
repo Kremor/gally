@@ -3,66 +3,89 @@ import random
 
 class Taboo:
 
-    def __init__(self, server_id: str):
+    def __init__(self, cards: list, rounds=1):
+        self.cards = cards
+        self.current_card = ()
+        self.current_player = ''
+        self.watcher = ''
         self.players = []
-        self.team_a = 0
-        self.team_b = 0
         self.playing = False
+        self.break_ = False
+        self.rounds = rounds
+        self.team_a = []
+        self.team_b = []
+        self.team_a_score = 0
+        self.team_b_score = 0
         self.turns = []
 
     def add_player(self, player: str):
-        if self.playing:
-            return TabooResult(False, "Can't add players while a game is taking place.")
-        elif player in self.players:
-            return TabooResult(False, "Player is already in the game.")
-        else:
+        if player not in self.players:
             self.players.append(player)
-            return TabooResult(True, "<@{}> was added to the game.".format(player))
+
+    def guess(self, word: str):
+        if word == self.current_card[0]:
+            self.current_card = self.cards.pop()
+            if self.current_player in self.team_a:
+                self.team_a_score += 1
+            else:
+                self.team_b_score += 1
+            return True
+        return False
+
+    def next_card(self):
+        self.current_card = self.cards.pop()
+        if self.current_player in self.team_a:
+            self.team_a_score += 1
+        else:
+            self.team_b_score += 1
 
     def next_turn(self):
-        pass
+        if self.current_player in self.team_a:
+            self.team_b_score += 1
+        elif self.current_player in self.team_b:
+            self.team_a_score += 1
+
+        if not self.turns:
+            self.rounds -= 1
+            if not self.rounds:
+                self.playing = False
+            else:
+                self.turns = self.players[:]
+
+        if self.playing:
+            self.current_card = self.cards.pop()
+            self.current_player = self.turns.pop()
+            self.watcher = self.players[
+                self.players.index(self.current_player) + 3
+                if self.players.index(self.current_player) + 3 < len(self.players)
+                else self.players.index(self.current_player) + 3 - len(self.players)
+            ]
 
     def remove_player(self, player: str):
-        if self.playing:
-            return TabooResult(False, "Can't remove players when a game is taking place.")
-        elif player not in self.players:
-            return TabooResult(False, "<@{}> is not in the game.".format(player))
-        else:
+        if player in self.players:
             self.players.remove(player)
-            return TabooResult(True, "Player removed.")
 
     def skip_card(self):
-        pass
-
-    def skip_player(self):
-        pass
+        self.current_card = self.cards.pop()
+        if self.current_player in self.team_a:
+            self.team_b_score += 1
+        else:
+            self.team_a_score += 1
 
     def start(self):
-        if self.playing:
-            return TabooResult(False, "The game already started.")
-        elif len(self.players) < 4:
-            return TabooResult(False, "Need at least 4 players to start the game.")
-        else:
-            random.shuffle(self.players)
-            team_a = "+ Team A\n" + '-' * 20
-            team_b = "+ Team B\n" + '-' * 20
-
-            for i, player in self.players:
-                if (i+1) % 2 == 1:
-                    team_a += '\n' + '- ' + '<@{}>'.format(player)
-                else:
-                    team_b += '\n' + '- ' + '<@{}>'.format(player)
-
+        if not self.playing:
             self.playing = True
-
-            return "=== GAME STARTED ===\n" + team_a + '\n' + team_b
+            random.shuffle(self.cards)
+            random.shuffle(self.players)
+            self.turns = self.players[:]
+            for i, player in enumerate(self.players):
+                if i % 2 == 0:
+                    self.team_a.append(player)
+                else:
+                    self.team_b.append(player)
+            self.next_turn()
 
     def stop(self):
         if self.playing:
             self.playing = False
-
-
-class TabooResult:
-    def __init__(self, success: bool, message: str):
-        self.success = success
-        self.message = message
+            self.break_ = True
