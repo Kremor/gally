@@ -1,3 +1,6 @@
+:toc:
+
+
 == How to play
 
 To start a new game type `\taboo` on chat. The bot will create a new game and wait for players to join, you need at least 4 players to be able to play. The game will start after 5 minutes.
@@ -152,3 +155,11 @@ Usage:
 ----
 
 |===
+
+== How to run
+
+To start the bot the bot's token and owner's id must be passed as parameters:
+
+----
+python bot.py -t <token> -o <owner_id>
+----
