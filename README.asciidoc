@@ -64,6 +64,15 @@ Usage:
 \addcard <word> <taboo word 1> <taboo word 2> ...
 ----
 
+| `\card \c`
+a| Shows a card as it is in the database.
+
+Usage:
+
+----
+\showcard <word>
+----
+
 | `\delcard \dc`
 a| Removes a card from the deck.
 
@@ -80,15 +89,6 @@ Usage:
 
 ----
 \replcard <word> <taboo word 1> <taboo word 2> ...
-----
-
-| `\showcard \c`
-a| Shows a card as it is in the database.
-
-Usage:
-
-----
-\showcard <word>
 ----
 
 |===
@@ -142,7 +142,7 @@ Usage:
 \setrounds <number of rounds>
 ----
 
-| `\settimer \st`
+| `\settime \st`
 a| *_Admins only_*. Sets the timer per turn in seconds (default is 120). This variable is global and will be aplied to all the games.
 
 Usage:

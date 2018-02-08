@@ -59,6 +59,13 @@ async def on_ready():
 
 @bot.command(name='addcard', aliases=['ac'], pass_context=True)
 async def add_card(context, *args):
+    """
+    Add a new card to the database.
+
+    Usage:
+
+        \addcard <card_name> <taboo1> <taboo2> <taboo3> <taboo4> ...
+    """
     if len(args) == 0:
         await bot.say("No arguments passed.")
     elif len(args) < 5:
@@ -86,8 +93,45 @@ async def add_card(context, *args):
         connection.close()
 
 
+@bot.command(name='card', aliases=['c'], pass_context=True)
+async def show_card(context, *args):
+    """
+    Shows a card from the database
+
+    Usage:
+
+        \card <card_name>
+    """
+    if len(args) < 1:
+        await bot.say("No arguments passed.")
+    else:
+        card = args[0].upper().strip()
+        server_id = context.message.server.id
+
+        connection = sqlite3.connect('db/{}.db'.format(server_id))
+        cursor = connection.cursor()
+
+        cursor.execute("select taboo from cards where card like '{}'".format(card))
+        taboo_ = cursor.fetchone()
+        taboo_ = taboo_[0] if taboo_ else None
+
+        if taboo_:
+            await bot.say("```diff\n+ {}\n{}\n- {}```".format(
+                card, '-'*20, '\n- '.join(taboo_.split('|'))
+            ))
+        else:
+            await bot.say("The card {} does not exists in the database.".format(card))
+
+
 @bot.command(name='delcard', aliases=['dc'], pass_context=True)
 async def del_card(context, *args):
+    """
+    Removes a card from the database.
+
+    Usage:
+
+        \delcard <card_name>
+    """
     if len(args) < 1:
         await bot.say("No arguments passed.")
     else:
@@ -115,6 +159,14 @@ async def del_card(context, *args):
 
 @bot.command(name='replcard', aliases=['rc'], pass_context=True)
 async def replace_card(context, *args):
+    """
+    Replace all the taboo words of a card.
+    If the card does not exists it is added to the database instead.
+
+    Usage:
+
+        \replcard <card_name> <taboo1> <taboo2> <taboo3> <taboo4>
+    """
     if len(args) == 0:
         await bot.say("No arguments passed.")
     elif len(args) < 5:
@@ -139,39 +191,32 @@ async def replace_card(context, *args):
         connection.close()
 
 
-@bot.command(name='showcard', aliases=['c'], pass_context=True)
-async def show_card(context, *args):
-    if len(args) < 1:
-        await bot.say("No arguments passed.")
-    else:
-        card = args[0].upper().strip()
-        server_id = context.message.server.id
-
-        connection = sqlite3.connect('db/{}.db'.format(server_id))
-        cursor = connection.cursor()
-
-        cursor.execute("select taboo from cards where card like '{}'".format(card))
-        taboo_ = cursor.fetchone()
-        taboo_ = taboo_[0] if taboo_ else None
-
-        if taboo_:
-            await bot.say("```diff\n+ {}\n{}\n- {}```".format(
-                card, '-'*20, '\n- '.join(taboo_.split('|'))
-            ))
-        else:
-            await bot.say("The card {} does not exists in the database.".format(card))
-
-
 """ ---... Taboo Game ...--- """
 
 
 @bot.command(name='buzz', pass_context=True)
-async def buzz(context):
+async def buzz(context, *args):
+    """
+    Use it when the clue giver commits a fault.
+    Only the card watcher can use this command during the game.
+    When used the current card is skipped and the card watcher's team receives a point.
+
+    Usage:
+
+        \buzz <taboo_word>
+    """
     pass
 
 
 @bot.command(name='join', aliases=['j'], pass_context=True)
 async def join(context):
+    """
+    Adds you to the game.
+
+    Usage:
+
+        \join
+    """
     server_id = context.message.server.id
     channel_id = context.message.channel.id
     author = context.message.author
@@ -202,6 +247,13 @@ async def join(context):
 
 @bot.command(name='leave', aliases=['l'], pass_context=True)
 async def leave(context):
+    """
+    Removes you from the game.
+
+    Usage:
+
+        \leave
+    """
     server_id = context.message.server.id
     channel_id = context.message.channel.id
     author = context.message.author
@@ -232,6 +284,15 @@ async def leave(context):
 
 @bot.command(name='skip', aliases=['s'], pass_context=True)
 async def skip(context):
+    """
+    Skips the current card.
+    Only the clue giver can use this command.
+    When used the opposite team receives a point.
+
+    Usage:
+
+        \skip
+    """
     server_id = context.message.server.id
     channel_id = context.message.channel.id
 
@@ -247,6 +308,13 @@ async def skip(context):
 
 @bot.command(name='start', pass_context=True)
 async def start(context):
+    """
+    Forces a game to start.
+
+    Usage:
+
+        \start
+    """
     server_id = context.message.server.id
     channel_id = context.message.channel.id
 
@@ -272,6 +340,13 @@ async def start(context):
 
 @bot.command(name='stop', pass_context=True)
 async def stop(context):
+    """
+    Forces a game to stop.
+
+    Usage:
+
+        \stop
+    """
     server_id = context.message.server.id
     channel_id = context.message.channel.id
 
@@ -287,6 +362,14 @@ async def stop(context):
 
 @bot.command(name='taboo', aliases=['t'], pass_context=True)
 async def taboo(context):
+    """
+    Starts a new game.
+    When used will wait 5 minutes for other people to join.
+
+    Usage:
+
+        \taboo
+    """
     server_id = context.message.server.id
 
     taboo_game = None if server_id not in games else games[server_id]
@@ -326,6 +409,13 @@ async def taboo(context):
 
 @bot.command(name='addadmin', aliases=['aa'], pass_context=True)
 async def add_admin(context):
+    """
+    Add a bot administrator. Admins only.
+
+    Usage:
+
+        \addadmin <@user>
+    """
     author = context.message.author.id
     mentions = context.message.mentions
     server_id = context.message.server.id
@@ -346,6 +436,13 @@ async def add_admin(context):
 
 @bot.command(name='listadmins', aliases=['la'], pass_context=True)
 async def list_admins(context):
+    """
+    List all the bot's administrators. Admins only.
+
+    Usage:
+
+        \listadmins
+    """
     author = context.message.author.id
     server_id = context.message.server.id
 
@@ -360,6 +457,13 @@ async def list_admins(context):
 
 @bot.command(name='listconf', aliases=['lc'], pass_context=True)
 async def list_conf(context):
+    """
+    List the bot settings. Admins only.
+
+    Usage:
+
+        \listconf
+    """
     server_id = context.message.server.id
     connection = sqlite3.connect('db/{}.db'.format(server_id))
     cursor = connection.cursor()
@@ -377,6 +481,13 @@ async def list_conf(context):
 
 @bot.command(name='removeadmin', aliases=['ra'], pass_context=True)
 async def remove_admin(context):
+    """
+    Remove a bot administrator. Admins only.
+
+    Usage:
+
+        \removeadmin <@user>
+    """
     author = context.message.author.id
     mentions = context.message.mentions
     server_id = context.message.server.id
@@ -397,11 +508,21 @@ async def remove_admin(context):
 
 @bot.command(name='repo')
 async def repo():
+    """
+    Links the bot's git repository.
+    """
     await bot.say('https://github.com/Kremor/gally')
 
 
 @bot.command(name='setchannel', aliases=['sc'], pass_context=True)
 async def set_channel(context):
+    """
+    Sets the channel to be used for the game.
+
+    Usage:
+
+        \setchannel <#channel>
+    """
     author_id = context.message.author.id
     server_id = context.message.server.id
 
@@ -423,6 +544,13 @@ async def set_channel(context):
 
 @bot.command(name='setrounds', aliases=['sr'], pass_context=True)
 async def set_rounds(context, *args):
+    """
+    Sets the number of rounds per game. Admins only.
+
+    Usage:
+
+        \setrounds <rounds>
+    """
     author_id = context.message.author.id
     server_id = context.message.server.id
 
@@ -447,8 +575,15 @@ async def set_rounds(context, *args):
     await bot.say("Setting updated. A game will finish after {} rounds.".format(args[0]))
 
 
-@bot.command(name='settimer', aliases=['st'], pass_context=True)
+@bot.command(name='settime', aliases=['st'], pass_context=True)
 async def set_timer(context, *args):
+    """
+    Sets the durations per turn in seconds. Admins only.
+
+    Usage:
+
+        \settime <seconds>
+    """
     author_id = context.message.author.id
     server_id = context.message.server.id
 
