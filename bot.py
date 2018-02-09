@@ -25,7 +25,7 @@ async def on_message(message):
     if str(settings[message.server.id]['CHANNEL']) == str(message.channel.id):
         if str(message.server.id) in games:
             if games[str(message.server.id)].playing:
-                await queues[message.server.id].put(message.content)
+                await queues[str(message.server.id)].put(message.content)
 
     await bot.process_commands(message)
 
@@ -47,7 +47,7 @@ async def on_ready():
 
         settings[server.id] = {}
         for setting, value in settings_:
-            if __is_number(value):
+            if __is_number(value) and len(setting) < 3:
                 settings[server.id][setting] = int(value)
             else:
                 settings[server.id][setting] = value
@@ -205,7 +205,18 @@ async def buzz(context, *args):
 
         \buzz <taboo_word>
     """
-    pass
+    author_id = context.message.author.id
+    server_id = context.message.server.id
+    channel_id = context.message.channel.id
+
+    if server_id in games:
+        if channel_id == settings[server_id]['CHANNEL']:
+            if args:
+                taboo_game = games[server_id]
+                if author_id == taboo_game.watcher:
+                    taboo_word = args[0].upper().strip()
+                    if taboo_word in taboo_game.current_card[1].split('|'):
+                        taboo_game.skip()
 
 
 @bot.command(name='join', aliases=['j'], pass_context=True)
@@ -350,7 +361,7 @@ async def stop(context):
     server_id = context.message.server.id
     channel_id = context.message.channel.id
 
-    if channel_id != __get_setting(server_id, 'CHANNEL'):
+    if channel_id != settings[server_id]['CHANNEL']:
         return
 
     if server_id not in games:
@@ -371,6 +382,10 @@ async def taboo(context):
         \taboo
     """
     server_id = context.message.server.id
+    channel = context.message.channel
+
+    if channel.id != settings[server_id]['CHANNEL']:
+        return
 
     taboo_game = None if server_id not in games else games[server_id]
 
@@ -381,13 +396,10 @@ async def taboo(context):
         cursor.execute("select * from cards")
         cards = cursor.fetchall()
 
-        cursor.execute("select value from settings where setting like 'CHANNEL'")
-        channel_id = cursor.fetchone()[0]
-
         cursor.close()
         connection.close()
 
-        if channel_id == 'NONE':
+        if channel.id == 'NONE':
             await bot.say("Can't start a new game. A channel hasn't been set.")
             return
 
@@ -396,7 +408,7 @@ async def taboo(context):
         games[server_id] = taboo_game
         queues[server_id] = asyncio.Queue()
 
-        bot.loop.create_task(game_loop(server_id, channel_id))
+        bot.loop.create_task(game_loop(server_id, channel, settings[server_id]['SECONDS']))
 
     elif taboo_game.playing:
         await bot.say("Can't start a new game when there's one taking place.")
@@ -752,10 +764,12 @@ def __is_token(token: str):
 """ ---... GAME LOOP ...--- """
 
 
-async def game_loop(server_id: str, channel_id: str, time_per_turn: int):
+async def game_loop(server_id: str, channel: str, time_per_turn: int):
+
     taboo_game = games[server_id]
 
-    await bot.say("""
+    await bot.send_message(channel,
+            """
             Game created. The game will start in 5 minutes.\nType `\\join` to enter the game.
             """)
 
@@ -770,20 +784,23 @@ async def game_loop(server_id: str, channel_id: str, time_per_turn: int):
             time = 0
             minute -= 1
             await bot.send_message(
-                channel_id,
+                channel,
                 "{} minutes before the game starts.\nType `\\join`to enter the game".format(minute)
             )
         if not minute or taboo_game.break_:
             break
 
     if taboo_game.break_:
+        await bot.send_message(channel, "Game cancelled.")
+        del games[server_id]
         return
 
     if len(taboo_game.players) < 4:
         await bot.send_message(
-            channel_id,
+            channel,
             "Game cancelled, you need at least 4 players to start a new game."
         )
+        del games[server_id]
         return
 
     await bot.say("Game has started.")
@@ -812,7 +829,7 @@ async def game_loop(server_id: str, channel_id: str, time_per_turn: int):
             queues[server_id] = asyncio.Queue()
 
             await bot.send_message(
-                channel_id,
+                channel,
                 "Time's over! It's next team turn"
             )
 
@@ -823,10 +840,19 @@ async def game_loop(server_id: str, channel_id: str, time_per_turn: int):
             guess = await  queues[server_id].get().upper().strip()
             if taboo_game.guess(guess):
                 await bot.send_message(
-                    channel_id,
+                    channel,
                     "Correct! The word was {}".format(taboo_game.current_card[0])
                 )
                 taboo_game.next_card()
+
+                current_card = __card_formatter(taboo_game.current_card)
+                current_player = bot.get_server(server_id).get_member(taboo_game.current_player)
+                watcher = bot.get_server(server_id).get_member(taboo_game.watcher)
+
+                await bot.send_message(current_player, current_card)
+                await bot.send_message(watcher, current_card)
+
+                queues[server_id] = asyncio.Queue()
 
             time = 0
 
@@ -835,7 +861,7 @@ async def game_loop(server_id: str, channel_id: str, time_per_turn: int):
         turn_time -= 0.01
         if time > 60:
             await bot.send_message(
-                channel_id,
+                channel,
                 "Game cancelled due to lack of activity."
             )
             break

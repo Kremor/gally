@@ -158,7 +158,7 @@ Usage:
 
 == How to run
 
-To start the bot the bot's token and owner's id must be passed as parameters:
+To start the bot, the bot's token and owner's id must be passed as parameters:
 
 ----
 python bot.py -t <token> -o <owner_id>
