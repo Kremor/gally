@@ -5,9 +5,10 @@ import re
 import shutil
 import sqlite3
 
+from discord import Game
 from discord.ext import commands
 
-from taboo import Taboo
+from gally.taboo import Taboo
 
 bot = commands.Bot('\\')
 
@@ -51,7 +52,8 @@ async def on_ready():
                 settings[server.id][setting] = int(value)
             else:
                 settings[server.id][setting] = value
-        print(settings)
+
+    await bot.change_presence(game=Game(name='\\help'))
 
 
 """ ---... Cards management ...--- """
