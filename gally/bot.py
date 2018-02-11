@@ -1,349 +1,148 @@
 import argparse
-import re
-import shutil
+from os import path
 import sqlite3
 
 from discord.ext import commands
 
+import gally.utils as utils
+
+
 bot = commands.Bot('\\')
-
-settings = {}
-
-__owner_id = ''
-
-
-def get_dir() -> str:
-    import os
-    from pathlib import Path
-
-    home_dir = str(Path.home())
-
-    if not os.path.exists(home_dir + '/.local'):
-        os.mkdir(home_dir + '/.local')
-
-    if not os.path.exists(home_dir + '/.local/gally_bot'):
-        os.mkdir(home_dir + '/.local/gally_bot')
-
-    if not os.path.exists(home_dir + '/.local/gally_bot/db'):
-        os.mkdir(home_dir + '/.local/gally_bot/db')
-
-    return home_dir + '/.local/gally_bot/'
-
-
-
-def is_channel(context):
-    return settings[context.message.server.id]['CHANNEL'] == context.message.channel.id
-
-
-def is_owner():
-    global __owner_id
-
-    def predicate(context):
-        return context.message.author.id == __owner_id
-
-    return commands.check(predicate)
 
 
 @bot.event
 async def on_ready():
-    # from os import path
-    #
-    # bot_dir = get_dir()
-    #
-    # for server in bot.servers:
-    #     if not path.exists(bot_dir + 'db/{}.db'.format(server.id)):
-    #         shutil.copy2('database.db', bot_dir + 'db/{}.db'.format(server.id))
-    #
-    #     connection = sqlite3.connect(bot_dir + 'db/{}.db'.format(server.id))
-    #     cursor = connection.cursor()
-    #
-    #     cursor.execute("select * from settings")
-    #     settings_ = cursor.fetchall()
-    #
-    #     cursor.close()
-    #     connection.close()
-    #
-    #     settings[server.id] = {}
-    #     for setting, value in settings_:
-    #         if __is_number(value) and len(setting) < 3:
-    #             settings[server.id][setting] = int(value)
-    #         else:
-    #             settings[server.id][setting] = value
-    #
-    # await bot.change_presence(game=Game(name='\\help'))
+    from shutil import copy2
+    from discord import Game
 
-    bot.load_extension('gally.taboo')
+    bot_dir = utils.get_dir()
+
+    for server in bot.servers:
+        server_db_path = bot_dir + '/db/{}.db'.format(server.id)
+        if not path.exists(server_db_path):
+            copy2('database.db', server_db_path)
+
+        print('Connected to server {} as {}'.format(server.name, server.me.name))
+
+    bot_db = utils.get_dir() + '/bot.db'
+
+    connection = sqlite3.connect(bot_db)
+    cursor = connection.cursor()
+
+    cursor.execute("select name from extensions")
+    extensions_ = [ext[0] for ext in cursor.fetchall()]
+
+    for ext in extensions_:
+        if not ext.startswith('gally.', 0, len('gally.')):
+            ext = 'gally.' + ext
+        print("Extension '{}' loaded".format(ext))
+        bot.load_extension(ext)
+
+    cursor.close()
+    connection.close()
+
+    await bot.change_presence(game=Game(name='\\help'))
+
+
+@bot.command(name='e')
+@utils.is_owner()
+async def extensions():
+    """
+    Lists all the loaded extensions. Bot owner only
+    """
+    extensions_ = bot.extensions
+
+    if not extensions_:
+        await bot.say(embed=utils.get_embed('There are not extensions loaded'))
+        return
+
+    message = ''
+    for i, extension in enumerate(extensions_):
+        message += '{}. {}\n'.format(i+1, extension)
+
+    await bot.say(embed=utils.get_embed(message, title='Extensions'))
 
 
 @bot.command(name='le')
-@is_owner()
-async def load_extension(ext_name):
+@utils.is_owner()
+async def load_extension(ext_name: str):
     """
     Loads an extension. Bot owner only.
     """
-    await bot.load_extension(ext_name)
+    if not path.exists('gally/extensions/{}.py'.format(ext_name)):
+        await bot.say(embed=utils.get_embed(
+            "The extension '{}' does not exists.".format(ext_name)
+        ))
+        return
+
+    ext_name = 'gally.extensions.{}'.format(ext_name)
+
+    bot_db = utils.get_dir() + '/bot.db'
+
+    connection = sqlite3.connect(bot_db)
+    connection.execute("replace into extensions(name) values('{}')".format(
+        ext_name
+    ))
+    connection.commit()
+    connection.close()
+
+    bot.load_extension(ext_name)
+    await bot.say(embed=utils.get_embed("Extension '{}' loaded".format(ext_name)))
+
+
+@bot.command(name='re')
+@utils.is_owner()
+async def reload_extension(ext_name):
+    """
+    Realoads an extension. Bot owner only.
+    """
+    if not path.exists('gally/extensions/{}.py'.format(ext_name)):
+        await bot.say(embed=utils.get_embed(
+            "The extension '{}' does not exists.".format(ext_name)
+        ))
+        return
+
+    ext_name = 'gally.extensions.{}'.format(ext_name)
+
+    bot_db = utils.get_dir() + '/bot.db'
+
+    connection = sqlite3.connect(bot_db)
+    connection.execute("replace into extensions(name) values('{}')".format(
+        ext_name
+    ))
+    connection.commit()
+    connection.close()
+
+    bot.unload_extension(ext_name)
+    bot.load_extension(ext_name)
+    await bot.say(embed=utils.get_embed("Extension '{}' reloaded".format(ext_name)))
 
 
 @bot.command(name='ule')
-@is_owner()
+@utils.is_owner()
 async def unload_extension(ext_name):
     """
     Unloads and extension. Bot owner only.
     """
+    if not path.exists('gally/extensions/{}.py'.format(ext_name)):
+        await bot.say(embed=utils.get_embed(
+            "The extension '{}' does not exists.".format(ext_name)
+        ))
+        return
+
+    ext_name = 'gally.extensions.{}'.format(ext_name)
+
+    bot_db = utils.get_dir() + '/bot.db'
+
+    connection = sqlite3.connect(bot_db)
+    connection.execute("delete from extensions where name like '{}'".format(
+        ext_name
+    ))
+    connection.commit()
+    connection.close()
+
     bot.unload_extension(ext_name)
-
-
-""" ---... Miscellaneous ...--- """
-
-
-# @bot.command(name='addadmin', aliases=['aa'], pass_context=True)
-# async def add_admin(context):
-#     """
-#     Add a bot administrator. Admins only.
-#
-#     Usage:
-#
-#         \addadmin <@user>
-#     """
-#     author = context.message.author.id
-#     mentions = context.message.mentions
-#     server_id = context.message.server.id
-#
-#     if not len(mentions):
-#         await bot.say('No arguments passed after the command')
-#         return
-#
-#     admins = __get_admins(server_id)
-#
-#     if author in admins:
-#         if mentions[0].id not in admins:
-#             __add_admin(server_id, mentions[0].id)
-#             await bot.say("{} is now an admin.".format(mentions[0].mention))
-#         else:
-#             await bot.say("{} was already an admin.".format(mentions[0].mention))
-#
-#
-# @bot.command(name='listadmins', aliases=['la'], pass_context=True)
-# async def list_admins(context):
-#     """
-#     List all the bot's administrators. Admins only.
-#
-#     Usage:
-#
-#         \listadmins
-#     """
-#     author = context.message.author.id
-#     server_id = context.message.server.id
-#
-#     admins = __get_admins(server_id)
-#
-#     if author in admins:
-#         text = ""
-#         for i, admin in enumerate(admins):
-#             text += " {}. <@{}>\n".format(i+1, admin)
-#         await bot.say("Admins:\n" + text)
-#
-#
-# @bot.command(name='listconf', aliases=['lc'], pass_context=True)
-# async def list_conf(context):
-#     """
-#     List the bot settings. Admins only.
-#
-#     Usage:
-#
-#         \listconf
-#     """
-#     server_id = context.message.server.id
-#     connection = sqlite3.connect('db/{}.db'.format(server_id))
-#     cursor = connection.cursor()
-#
-#     cursor.execute("select * from settings")
-#     settings = cursor.fetchall()
-#     string = "```"
-#
-#     for setting, value in settings:
-#         string += '\n{}\t-\t{}'.format(setting, value)
-#     string += '\n```'
-#
-#     await bot.say(string)
-#
-#
-# @bot.command(name='removeadmin', aliases=['ra'], pass_context=True)
-# async def remove_admin(context):
-#     """
-#     Remove a bot administrator. Admins only.
-#
-#     Usage:
-#
-#         \removeadmin <@user>
-#     """
-#     author = context.message.author.id
-#     mentions = context.message.mentions
-#     server_id = context.message.server.id
-#
-#     if not len(mentions):
-#         await bot.say('No arguments passed after the command')
-#         return
-#
-#     admins = __get_admins(server_id)
-#
-#     if author in admins:
-#         if mentions[0].id not in admins:
-#             await bot.say("{} is not an admin.".format(mentions[0].mention))
-#         else:
-#             __remove_admin(server_id, mentions[0].id)
-#             await bot.say("{} was removed from the admin list.".format(mentions[0].mention))
-#
-#
-# @bot.command(name='repo')
-# async def repo():
-#     """
-#     Links the bot's git repository.
-#     """
-#     await bot.say('https://github.com/Kremor/gally')
-#
-#
-# """ ---... UTILITY ...--- """
-
-
-# def is_admin(context):
-#     global __owner_id
-#
-#     admins = __get_admins(context.message.server.id)
-#
-#     return is_owner(context) or context.message.author.id in admins
-#
-#
-# def __add_admin(server_id: str, admin_id: str):
-#     connection = sqlite3.connect('db/{}.db'.format(server_id))
-#     cursor = connection.cursor()
-#
-#     cursor.execute("insert into admins values({})".format(admin_id))
-#
-#     cursor.close()
-#     connection.commit()
-#     connection.close()
-
-
-# def __get_admins(server_id: str) -> list:
-#     global __owner_id
-#
-#     connection = sqlite3.connect('db/{}.db'.format(server_id))
-#     cursor = connection.cursor()
-#
-#     cursor.execute("select * from admins".format(server_id))
-#
-#     admins = [__owner_id] + [admin[0] for admin in cursor.fetchall()]
-#
-#     cursor.close()
-#     connection.close()
-#
-#     return admins
-#
-#
-# def __remove_admin(server_id: str, admin_id: str):
-#     connection = sqlite3.connect('db/{}.db'.format(server_id))
-#     cursor = connection.cursor()
-#
-#     cursor.execute("delete from admins where id like '{}'".format(admin_id))
-#
-#     cursor.close()
-#     connection.commit()
-#     connection.close()
-#
-#
-# def __add_card(server_id: str, card: str, taboos: str):
-#     connection = sqlite3.connect('db/{}.db'.format(server_id))
-#     cursor = connection.cursor()
-#
-#     cursor.execute("insert into cards values({}, {})".format(card, taboos))
-#
-#     cursor.close()
-#     connection.commit()
-#     connection.close()
-#
-#
-# def __get_cards(server_id: str) -> list:
-#     connection = sqlite3.connect('db/{}.db'.format(server_id))
-#     cursor = connection.cursor()
-#
-#     cursor.execute("select * from cards".format(server_id))
-#
-#     cards = list(cursor.fetchall())
-#
-#     cursor.close()
-#     connection.close()
-#
-#     return cards
-#
-#
-# def __remove_card(server_id: str, card: str):
-#     connection = sqlite3.connect('db/{}.db'.format(server_id))
-#     cursor = connection.cursor()
-#
-#     cursor.execute("delete from cards where card like '{}'".format(card))
-#
-#     cursor.close()
-#     connection.commit()
-#     connection.close()
-#
-#
-# def __get_setting(server_id: str, setting: str) -> str:
-#     connection = sqlite3.connect('db/{}.db'.format(server_id))
-#     cursor = connection.cursor()
-#
-#     cursor.execute("select value from settings where setting like '{}'".format(setting))
-#
-#     value = cursor.fetchone()[0]
-#
-#     cursor.close()
-#     connection.close()
-#
-#     return value
-#
-#
-# def __set_setting(server_id: str, setting: str, value: str):
-#     connection = sqlite3.connect('db/{}.db'.format(server_id))
-#     cursor = connection.cursor()
-#
-#     cursor.execute("replace into settings (setting, value) values('{}', '{}')".format(
-#         setting, value
-#     ))
-#
-#     cursor.close()
-#     connection.commit()
-#     connection.close()
-
-
-__user_id = re.compile(r'\d{17}')
-__c_s_id = re.compile(r'\d{18}')
-__number = re.compile(r'\d+')
-__token = re.compile(r'[0-9a-zA-Z._-]{57}')
-
-
-def __is_user_id(id: str):
-    if re.fullmatch(__user_id, id):
-        return True
-    return False
-
-
-def __is_c_s_id(id: str):
-    if re.fullmatch(__c_s_id, id):
-        return True
-    return False
-
-
-def __is_number(n: str):
-    if re.fullmatch(__number, n):
-        return True
-    return False
-
-
-def __is_token(token: str):
-    if re.fullmatch(__token, token):
-        return True
-    else:
-        return False
+    await bot.say(embed=utils.get_embed("Extension '{}' unloaded".format(ext_name)))
 
 
 """ ---... MAIN ...--- """
@@ -356,15 +155,31 @@ def main():
 
     args = parser.parse_args()
 
-    print(args)
-
-    global __owner_id
-    __owner_id = args.owner
+    owner_id = args.owner
     token = args.token
 
-    if not __is_user_id(__owner_id):
+    if not utils.is_user_id(owner_id):
         print('Argument passed to OWNER is not a valid user id.')
         return
+
+    bot_db = utils.get_dir() + '/bot.db'
+
+    connection = sqlite3.connect(bot_db)
+    cursor = connection.cursor()
+
+    cursor.execute("create table if not exists settings(setting text, value text)")
+    cursor.execute("create table if not exists extensions(name text)")
+
+    cursor.execute("create unique index if not exists idx_setting on settings(setting)")
+    cursor.execute("create unique index if not exists idx_ext_name on extensions(name)")
+
+    cursor.execute("replace into settings(setting, value) values('OWNER', '{}')".format(
+        owner_id
+    ))
+
+    cursor.close()
+    connection.commit()
+    connection.close()
 
     bot.run(token)
 
