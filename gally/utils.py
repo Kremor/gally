@@ -8,24 +8,24 @@ from discord.ext import commands
 
 def get_admins(server_id) -> list:
     # Owner
-    bot_db = get_dir() + '/bot.db'
+    bot_db = get_dir() + 'bot.db'
 
     connection = sqlite3.connect(bot_db)
     cursor = connection.cursor()
 
-    cursor.execute("select value from settings where setting like 'OWNER'")
+    cursor.execute("SELECT VALUE FROM SETTINGS WHERE NAME LIKE 'OWNER'")
     owner_id = cursor.fetchone()[0]
 
     cursor.close()
     connection.close()
 
     # Admins
-    server_db = get_dir() + '/db/{}.db'.format(server_id)
+    server_db = get_dir() + 'db/{}.db'.format(server_id)
 
     connection = sqlite3.connect(server_db)
     cursor = connection.cursor()
 
-    cursor.execute("select id from admins")
+    cursor.execute("SELECT ID FROM ADMINS")
     admins = [admin[0] for admin in cursor.fetchall()]
 
     cursor.close()
@@ -35,12 +35,12 @@ def get_admins(server_id) -> list:
 
 
 def get_setting(server_id: str, setting: str):
-    server_db = get_dir() + '/db/{}.db'.format(server_id)
+    server_db = get_dir() + 'db/{}.db'.format(server_id)
 
     connection = sqlite3.connect(server_db)
     cursor = connection.cursor()
 
-    cursor.execute("select value from settings where setting like '{}'".format(setting))
+    cursor.execute("SELECT VALUE FROM SETTINGS WHERE NAME LIKE '{}'".format(setting))
     value = cursor.fetchone()
 
     cursor.close()
@@ -58,13 +58,16 @@ def get_dir() -> str:
     if not os.path.exists(home_dir + '/.local'):
         os.mkdir(home_dir + '/.local')
 
-    if not os.path.exists(home_dir + '/.local/gally_bot'):
-        os.mkdir(home_dir + '/.local/gally_bot')
+    if not os.path.exists(home_dir + '/.local/share'):
+        os.mkdir(home_dir + '/.local/share')
 
-    if not os.path.exists(home_dir + '/.local/gally_bot/db'):
-        os.mkdir(home_dir + '/.local/gally_bot/db')
+    if not os.path.exists(home_dir + '/.local/share/gally_bot'):
+        os.mkdir(home_dir + '/.local/share/gally_bot')
 
-    return home_dir + '/.local/gally_bot'
+    if not os.path.exists(home_dir + '/.local/share/gally_bot/db'):
+        os.mkdir(home_dir + '/.local/share/gally_bot/db')
+
+    return home_dir + '/.local/share/gally_bot/'
 
 
 def get_embed(description: str, title: str=''):
@@ -90,12 +93,12 @@ def is_number(n: str):
 def is_owner():
 
     def predicate(context):
-        bot_db = get_dir() + '/bot.db'
+        bot_db = get_dir() + 'bot.db'
 
         connection = sqlite3.connect(bot_db)
         cursor = connection.cursor()
 
-        cursor.execute("select value from settings where setting like 'OWNER'")
+        cursor.execute("SELECT VALUE FROM SETTINGS WHERE NAME LIKE 'OWNER'")
         owner_id = cursor.fetchone()[0]
 
         cursor.close()
@@ -117,10 +120,10 @@ re_number = re.compile(r'\d+')
 
 
 def set_setting(server_id: str, setting: str, value: str):
-    server_db = get_dir() + '/db/{}.db'.format(server_id)
+    server_db = get_dir() + 'db/{}.db'.format(server_id)
 
     connection = sqlite3.connect(server_db)
-    connection.execute("replace into settings(setting, value) values('{}', '{}')".format(
+    connection.execute("REPLACE INTO SETTINGS(NAME, VALUE) VALUES('{}', '{}')".format(
         setting, value
     ))
     connection.commit()
