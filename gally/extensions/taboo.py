@@ -1,6 +1,7 @@
 import asyncio
 import enum
 import random
+import re
 import sqlite3
 
 from discord import Color
@@ -8,9 +9,13 @@ from discord import Embed
 from discord.ext import commands
 from discord.ext.commands import Bot
 
-from editdistance import eval
+import editdistance
 
 import gally.utils as utils
+
+
+buzz_re = re.compile(r'\\t(aboo)?\s+buzz\s+')
+taboo_re = re.compile(r'\\t(aboo)?\s+')
 
 
 def is_taboo_channel():
@@ -34,7 +39,7 @@ class TabooMsg:
         guess = 5
         buzz = 6
 
-    def __init__(self, type_: Type=Type.none, content=None, author: str=''):
+    def __init__(self, type_: Type=Type.none, content='', author: str=''):
         self.type = type_
         self.content = content
         self.author = author
@@ -68,6 +73,8 @@ class TabooGame:
         self.turns = []
         self.queue = asyncio.Queue()
 
+        self.bot.loop.create_task(self.game_loop())
+
     @staticmethod
     def format_card(card: tuple) -> str:
         return "```diff\n+ {}\n{}\n- {}\n```".format(
@@ -82,7 +89,7 @@ class TabooGame:
     async def buzz(self, word):
         word = word.uppeer().strip()
         for taboo in self.current_card[1].split('|'):
-            if word == taboo:
+            if editdistance.eval(taboo, word) < 2:
                 embed = Embed(description='<@{}> said **{}**.\nCard skipped.', title='Taboo')
                 embed.add_field(name='Card', value=self.format_card(self.current_card))
                 await self.bot.send_message(self.channel, embed=embed)
@@ -131,7 +138,7 @@ class TabooGame:
     async def guess(self, word):
         word = word.upper().strip()
 
-        if word == self.current_card[0]:
+        if editdistance.eval(word, self.current_card[0]) < 2:
             await self.bot.send_message(
                 self.channel,
                 embed=utils.get_embed(
@@ -189,7 +196,7 @@ class TabooGame:
             else:
                 self.team_b_score += 1
 
-    def send_message(self, type_: TabooMsg.Type, content=None, author=''):
+    def send_message(self, type_: TabooMsg.Type, content='', author=''):
         self.queue.put_nowait(TabooMsg(type_, content, author))
 
     async def skip_card(self):
@@ -206,22 +213,16 @@ class TabooGame:
         time = 0.0
         minutes = 5
 
+        await self.bot.send_message(
+            self.channel,
+            embed=utils.get_embed("New game created.\nType `\\taboo join` to enter the game")
+        )
+
         while True:
-            asyncio.sleep(0.01)
+            await asyncio.sleep(0.01)
             time += 0.01
 
             message = self.queue.get_nowait() if not self.queue.empty() else TabooMsg()
-
-            # Inactive time
-            if message.type == TabooMsg.Type.none:
-                inactive_time += 0.01
-                if inactive_time > 60:
-                    await self.bot.send_message(
-                        self.channel, embed=utils.get_embed("Game canceled due to inactivity.")
-                    )
-                    break
-            else:
-                inactive_time = 0
 
             # Quit game
             if message.type == TabooMsg.Type.stop:
@@ -233,6 +234,13 @@ class TabooGame:
 
             # Start game
             if message.type == TabooMsg.Type.start:
+                if len(self.players) < 4:
+                    await self.bot.send_message(
+                        self.channel,
+                        embed=utils.get_embed('You need at least 4 players to start a new game.')
+                    )
+                    self.send_message(TabooMsg.Type.stop)
+                    continue
                 random.shuffle(self.cards)
                 self.current_card = self.cards.pop()
 
@@ -244,7 +252,7 @@ class TabooGame:
                         self.team_b.append(player)
                 self.turns = self.players[:]
                 self.clue_giver = self.turns.pop()
-                self.watcher = self.get_watcher_id(self.clue_giver)
+                self.watcher = self.get_watcher_id()
 
                 await  self.dm_current_card()
 
@@ -264,7 +272,8 @@ class TabooGame:
                     time = 0
                     minutes -= 1
                     if minutes:
-                        self.bot.send_message(
+                        await self.bot.send_message(
+                            self.channel,
                             embed=utils.get_embed(
                                 "{} minutes before the game starts.".format(minutes)
                             )
@@ -272,6 +281,17 @@ class TabooGame:
                     else:
                         self.queue.put_nowait(TabooMsg(TabooMsg.Type.start))
             else:
+
+                # Inactive time
+                if message.type == TabooMsg.Type.none:
+                    inactive_time += 0.01
+                    if inactive_time > 60:
+                        await self.bot.send_message(
+                            self.channel, embed=utils.get_embed("Game canceled due to inactivity.")
+                        )
+                        break
+                else:
+                    inactive_time = 0
 
                 # Next turn
                 if time > self.seconds:
@@ -286,7 +306,7 @@ class TabooGame:
 
                 # Skip card
                 elif message.type == TabooMsg.Type.skip_card:
-                    if self.clue_giver == message.content:
+                    if self.clue_giver == message.author:
                         await self.skip_card()
                         await self.dm_current_card()
 
@@ -326,13 +346,16 @@ class Taboo:
         Play Taboo.
         """
         if context.invoked_subcommand is None:
+            match = re.match(taboo_re, context.message.content)
+            guess = match.string[match.end(0):] if match else ''
+            print(guess)
             server_id = context.message.server.id
-            if server_id in self.games:
+            if server_id in self.games and guess:
                 self.games[server_id].queue.put_nowait(
                     TabooMsg(
                         TabooMsg.Type.buzz,
-                        content=context.message.content,
-                        author=context.message.author.id
+                        guess,
+                        context.message.author.id
                     )
                 )
 
@@ -499,25 +522,13 @@ class Taboo:
         """
         server_id = context.message.server.id
 
-        if server_id in self.games:
+        match = re.match(buzz_re, context.message.content)
+        buzz = match.string[match.end(0):] if match else ''
+
+        if server_id in self.games and buzz:
             self.games[server_id].send_message(
                 TabooMsg.Type.buzz,
-                content=context.message.content,
-                author=context.message.author.id
-            )
-
-    @taboo.command(pass_context=True, name='guess', aliases=['g'])
-    @is_taboo_channel()
-    async def guess_word(self, context, *args):
-        if not args:
-            return
-
-        server_id = context.message.server.id
-
-        if server_id in self.games:
-            self.games[server_id].send_message(
-                TabooMsg.Type.guess,
-                content=context.message.content,
+                buzz,
                 author=context.message.author.id
             )
 
@@ -581,14 +592,14 @@ class Taboo:
             return
 
         if author.id not in taboo_game.players:
-            await self.bot.say("{} left the game :cry:".format(
+            await self.bot.say("You're not in the game dummy.".format(
                 context.message.author.mention
             ))
             return
 
         taboo_game.remove_player(author.id)
         await self.bot.say(embed=utils.get_embed(
-            "{} was removed to the game.\nThere are currently {} players in the game".format(
+            "{} left the game :cry:\nThere are currently {} players in the game".format(
                 author.mention, len(taboo_game.players)
             )
         ))
