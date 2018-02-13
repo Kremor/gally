@@ -70,8 +70,8 @@ def get_dir() -> str:
     return home_dir + '/.local/share/gally_bot/'
 
 
-def get_embed(description: str, title: str=''):
-    return Embed(title=title, description=description, color=Color.magenta())
+def get_embed(description: str, title: str='', color: Color=Color.magenta()):
+    return Embed(title=title, description=description, color=color)
 
 
 def is_admin():
