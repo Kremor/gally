@@ -1,3 +1,4 @@
+import os
 import re
 import sqlite3
 
@@ -32,6 +33,21 @@ def get_admins(server_id) -> list:
     connection.close()
 
     return [owner_id] + admins
+
+
+def get_db(server_id: str) -> str:
+    """
+    Returns the path to a server's database if it exists, otherwise raises a FileNotFoundError.
+
+    :param server_id: Server's ID
+    :return: Database's path.
+    """
+    server_db = get_dir() + 'db/{}.db'.format(server_id)
+
+    if os.path.isfile(server_db):
+        return server_db
+
+    raise FileNotFoundError
 
 
 def get_setting(server_id: str, setting: str):
