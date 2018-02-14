@@ -10,5 +10,5 @@ setup(
     license='MIT',
     url='https://github.com/Kremor/gally',
     packages=['gally'],
-    requires=['discord.py']
+    requires=['pip', 'discord.py']
 )

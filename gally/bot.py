@@ -1,7 +1,9 @@
 import argparse
-from os import path
+import os
+import pip
 import sqlite3
 
+from discord import ClientException
 from discord.ext import commands
 
 import gally.utils as utils
@@ -47,10 +49,12 @@ async def on_ready():
     extensions_ = [ext[0] for ext in cursor.fetchall()]
 
     for ext in extensions_:
-        if not ext.startswith('gally.', 0, len('gally.')):
-            ext = 'gally.' + ext
-        print("Extension '{}' loaded".format(ext))
-        bot.load_extension(ext)
+        try:
+            bot.load_extension(ext)
+            print("Extension '{}' loaded".format(ext))
+        except ClientException:
+            cursor.execute("DELETE FROM EXTENSIONS WHERE NAME LIKE '{}'".format(ext))
+            print("Extension '{}' could not be loaded".format(ext))
 
     cursor.close()
     connection.close()
@@ -96,7 +100,7 @@ async def add_admin(context):
     connection.close()
 
 
-@bot.command(pass_context=True, name='listadmins', aliases=['la'])
+@bot.command(pass_context=True, name='list_admins')
 @utils.is_admin()
 async def list_admins(context):
     """
@@ -115,7 +119,7 @@ async def list_admins(context):
     await bot.say(embed=utils.get_embed(message, 'Admins'))
 
 
-@bot.command(pass_context=True, name='listconf', aliases=['lc'])
+@bot.command(pass_context=True, name='list_conf')
 @utils.is_admin()
 async def list_conf(context):
     """
@@ -142,10 +146,29 @@ async def list_conf(context):
         message, 'Configuration'
     ))
 
+    cursor.close()
+    connection.close()
 
-@bot.command(name='listext', aliases=['ext'])
+
+@bot.command(name='list_all')
 @utils.is_owner()
-async def list_extensions():
+async def list_available_extension():
+    """
+    List all the available extensions. Bot owner only.
+    """
+    extensions = ''
+    i = 1
+    for path in os.listdir('gally/extensions'):
+        if os.path.isdir('gally/extensions/' + path):
+            if os.path.exists('gally/extensions/' + path + '/setup.py'):
+                extensions += '\n{}. {}'.format(i, path)
+                i += 1
+    await bot.say(embed=utils.get_embed(extensions, 'Available extensions'))
+
+
+@bot.command(name='extensions')
+@utils.is_owner()
+async def list_loaded_extensions():
     """
     Lists all the loaded extensions. Bot owner only
     """
@@ -162,19 +185,22 @@ async def list_extensions():
     await bot.say(embed=utils.get_embed(message, title='Extensions'))
 
 
-@bot.command(name='loadext')
+@bot.command(name='load_ext')
 @utils.is_owner()
 async def load_extension(ext_name: str):
     """
     Loads an extension. Bot owner only.
     """
-    if not path.exists('gally/extensions/{}.py'.format(ext_name)):
+    if not os.path.exists('gally/extensions/{}/setup.py'.format(ext_name)):
         await bot.say(embed=utils.get_embed(
-            "The extension '{}' does not exists.".format(ext_name)
+            "The extension '{}' could not be loaded `setup.py` does not exists.".format(ext_name)
         ))
         return
 
-    ext_name = 'gally.extensions.{}'.format(ext_name)
+    if os.path.exists('gally/extensions/{}/requirements.txt'.format(ext_name)):
+        pip.main(['install', '-r', 'gally/extensions/{}/requirements.txt'.format(ext_name)])
+
+    ext_name = 'gally.extensions.{}.setup'.format(ext_name)
 
     bot_db = utils.get_dir() + 'bot.db'
 
@@ -186,22 +212,25 @@ async def load_extension(ext_name: str):
     connection.close()
 
     bot.load_extension(ext_name)
-    await bot.say(embed=utils.get_embed("Extension '{}' loaded".format(ext_name)))
+    await bot.say(embed=utils.get_embed("Extension `{}` loaded".format(ext_name)))
 
 
-@bot.command(name='re')
+@bot.command(name='rload_ext')
 @utils.is_owner()
 async def reload_extension(ext_name):
     """
     Realoads an extension. Bot owner only.
     """
-    if not path.exists('gally/extensions/{}.py'.format(ext_name)):
+    if not os.path.exists('gally/extensions/{}/setup.py'.format(ext_name)):
         await bot.say(embed=utils.get_embed(
-            "The extension '{}' does not exists.".format(ext_name)
+            "The extension '{}' could not be loaded `setup.py` does not exists.".format(ext_name)
         ))
         return
 
-    ext_name = 'gally.extensions.{}'.format(ext_name)
+    if os.path.exists('gally/extensions/{}/requirements.txt'.format(ext_name)):
+        pip.main(['install', '-r', 'gally/extensions/{}/requirements.txt'.format(ext_name)])
+
+    ext_name = 'gally.extensions.{}.setup'.format(ext_name)
 
     bot_db = utils.get_dir() + 'bot.db'
 
@@ -214,10 +243,10 @@ async def reload_extension(ext_name):
 
     bot.unload_extension(ext_name)
     bot.load_extension(ext_name)
-    await bot.say(embed=utils.get_embed("Extension '{}' reloaded".format(ext_name)))
+    await bot.say(embed=utils.get_embed("Extension `{}` reloaded".format(ext_name)))
 
 
-@commands.command(pass_context=True, name='removeadmin', aliases=['ra'])
+@commands.command(pass_context=True, name='del_admin')
 @utils.is_admin()
 async def remove_admin(context):
     """
@@ -287,31 +316,34 @@ async def reset_server(server_id):
     pass
 
 
-@bot.command(name='ule')
+@bot.command(name='uload_ext', aliases=['ule'])
 @utils.is_owner()
 async def unload_extension(ext_name):
     """
     Unloads and extension. Bot owner only.
     """
-    if not path.exists('gally/extensions/{}.py'.format(ext_name)):
+    if not os.path.exists('gally/extensions/{}/setup.py'.format(ext_name)):
         await bot.say(embed=utils.get_embed(
-            "The extension '{}' does not exists.".format(ext_name)
+            "The extension '{}' could not be loaded `setup.py` does not exists.".format(ext_name)
         ))
         return
 
-    ext_name = 'gally.extensions.{}'.format(ext_name)
+    if os.path.exists('gally/extensions/{}/requirements.txt'.format(ext_name)):
+        pip.main(['install', '-r', 'gally/extensions/{}/requirements.txt'.format(ext_name)])
+
+    ext_name = 'gally.extensions.{}.setup'.format(ext_name)
 
     bot_db = utils.get_dir() + 'bot.db'
 
     connection = sqlite3.connect(bot_db)
-    connection.execute("DELETE FROM EXTENSIONS WHERE NAME LIKE '{}'".format(
+    connection.execute("DELETE FROM EXTENSIONS(NAME) VALUES('{}')".format(
         ext_name
     ))
     connection.commit()
     connection.close()
 
     bot.unload_extension(ext_name)
-    await bot.say(embed=utils.get_embed("Extension '{}' unloaded".format(ext_name)))
+    await bot.say(embed=utils.get_embed("Extension `{}` unloaded".format(ext_name)))
 
 
 """ ---... MAIN ...--- """

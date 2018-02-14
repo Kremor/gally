@@ -1,0 +1,1 @@
+from .taboo import Taboo
