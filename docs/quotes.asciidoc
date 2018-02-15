@@ -1,0 +1,58 @@
+:toc:
+
+= Quotes
+
+== Commands
+
+|====
+
+^.^s|Command ^.^s|Description
+
+|`add`
+a| Adds a quote to the database.
+
+Usage:
+
+----
+\q[uote] add <quote>
+----
+
+|`del`
+a| Deletes a quote from the database.
+Only the quote's author or an administrator can use this command.
+
+Usage:
+
+----
+\q[uote] del <quote number>
+----
+
+|`look`
+a| Looks in the data base for all the quotes that contains the text passed as argument.
+
+Usage:
+
+----
+\q[uote] look <text>
+----
+
+|`rand`
+a| Shows a random quote from the database.
+If a user is passed as argument, shows a random quote from that user.
+
+Usage:
+
+----
+\q[uote] rand <optional user>
+----
+
+|`show`
+a| Shows the quote that is assigned to the number passed as argument.
+
+Usage:
+
+----
+\q[uote] show <quote number>
+----
+
+|====
