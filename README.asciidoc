@@ -1,17 +1,165 @@
 :toc:
 
-== Extensions
+= Gally
 
-=== Adding an extension
+Gally is an modular discord bot written in python and designed to be easily extensible.
 
-=== Available extensions
+== Commands
 
-    - link:docs\taboo.asciidoc[Taboo]: Play taboo.
+The bot only includes the following command, any other fuctionality must be added bya extensions.
 
-== Install and Run
+=== Administrators
 
-To start the bot, the bot's token and owner's id must be passed as parameters:
+[cols=".^1,2", width="90%"]
+|====
+
+^s| Command ^s| Description
+
+.^| `\add_admin`
+a| *_Bot owner only_*. Adds a server's administrator.
+
+Usage:
 
 ----
-python gally -t <token> -o <owner_id>
+\add_admin <@user>
 ----
+
+.^| `\del_admin`
+a| *_Bot owner only_*. Removes an administrator.
+
+Usage:
+
+----
+\del_admin <@admin>
+----
+
+.^| `\list_admins`
+a| *_Admins only_*. Lists all the server's administrators.
+
+Usage:
+
+----
+\list_admins
+----
+
+|====
+
+=== Extensions
+
+[cols=".^1,2", width="90%"]
+|====
+
+^s| Command ^s| Description
+
+.^| `\ext`
+a| *_Bot owner only_*. List all the loaded extensions.
+
+Usage:
+
+----
+\ext
+----
+
+.^| `\list`
+a| *_Bot owner only_*. Lists all the available extensions.
+
+Usage
+
+----
+\list
+----
+
+.^| `\load`
+a| *_Bot owner only_*. Loads an extension.
+
+Usage:
+
+----
+\load <extension name>
+----
+
+.^| `\rload`
+a| *_Bot owner only_*. Reloads an extension.
+
+Usage:
+
+----
+\rload <extension name>
+----
+
+.^| `\uload`
+a| *_Bot owner only_*. Unloads an extension.
+
+Usage:
+
+----
+\uload <extension name>
+----
+
+|====
+
+=== Miscellaneous
+
+[cols=".^1,2", width="90%"]
+|====
+
+^s| Command ^s| Description
+
+.^| `\list_conf`
+a| *_Admins only_*. Lists the server configuration.
+
+Usage:
+
+----
+\list_conf
+----
+
+.^| `\repo`
+a| Puts a link to the bot's git repository.
+
+Usage:
+
+----
+\repo
+----
+
+|====
+
+== Available extensions
+
+    Quotes ::
+    Add and manage quotes _(see link:docs/quotes.asciidoc[quotes.asciidoc])_
+
+    Taboo ::
+    Play https://en.wikipedia.org/wiki/Taboo_(game)[taboo] _(see link:docs/taboo.asciidoc[taboo
+    .asciidoc])_
+
+== Adding an extension
+
+An extension has the following structure:
+
+----
+extension_name/      // <1>
+|- __init__.py
+|- ext.py            // <2>
+|- requirements.txt  // <3>
+|- ...
+----
+
+Where:
+
+<1> Is a directory called with the extension's name.
+<2> This file *must* be included and must contain the extension's code and a `setup` function
+that tells the bot how to load the extension.
+<3> Same as a https://pip.pypa.io/en/stable/reference/pip_install/#requirements-file-format[pip's
+requirement file]. This file is optional and if included the bot will call pip and install the
+dependencies listed on it. Keep in mind that some libraries may have dependencies outside of
+python that cannot be installed with pip and must be manually installed instead.
+
+The extension must be inside the directory `gally/extensions`, and can be loaded with the command
+ `\load <extension name>`.
+
+== TODO
+
+- [ ] Implement Logging.
+- [ ] Add an ORM model for the database.

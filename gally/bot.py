@@ -63,8 +63,8 @@ async def on_ready():
     await bot.change_presence(game=Game(name='\\help'))
 
 
-@bot.command(pass_context=True, name='addadmin', aliases=['aa'])
-@utils.is_admin()
+@bot.command(pass_context=True, name='add_admin', aliases=['aa'])
+@utils.is_owner()
 async def add_admin(context):
     """
     Add a bot administrator. Admins only.
@@ -167,7 +167,7 @@ async def list_available_extension():
     await bot.say(embed=utils.get_embed(extensions, 'Available extensions'))
 
 
-@bot.command(name='extensions')
+@bot.command(name='ext')
 @utils.is_owner()
 async def list_loaded_extensions():
     """
@@ -237,7 +237,7 @@ async def reload_extension(ext_name):
 
 
 @commands.command(pass_context=True, name='del_admin')
-@utils.is_admin()
+@utils.is_owner()
 async def remove_admin(context):
     """
     Remove a bot administrator. Admins only.
@@ -286,24 +286,6 @@ async def repo():
     await bot.say(embed=utils.get_embed(
         "https://github.com/Kremor/gally", 'Repo'
     ))
-
-
-@bot.command()
-@utils.is_owner()
-async def reset():
-    """
-    Resets all the bot settings and databases. Bot owner only.
-    """
-    pass
-
-
-@bot.command()
-@utils.is_owner()
-async def reset_server(server_id):
-    """
-    Resets the server database. Bot owner only.
-    """
-    pass
 
 
 @bot.command(name='uload')
