@@ -59,8 +59,7 @@ class TabooGame:
         self.seconds = seconds
 
         self.current_card = ()
-        self.clue_giver = ''
-        self.watcher = ''
+        self.giver = ''
 
         self.players = []
         self.playing = False
@@ -99,21 +98,32 @@ class TabooGame:
                 break
 
     async def dm_current_card(self):
-        if not self.current_card or not self.clue_giver or not self.watcher:
+        if not self.current_card or not self.giver:
             return
 
         card = self.format_card(self.current_card)
-        clue_giver = self.get_player(self.clue_giver)
-        watcher = self.get_player(self.watcher)
+        giver = self.get_player(self.giver)
+        team = self.team_a if self.giver not in self.team_a else self.team_b
 
         await self.bot.send_message(
-            clue_giver,
-            embed=utils.get_embed(card)
+            giver,
+            "You're the *giver*. Try to make your team guess the word."
         )
         await self.bot.send_message(
-            watcher,
+            giver,
             embed=utils.get_embed(card)
         )
+
+        for player in team:
+            member = self.get_player(player)
+            await self.bot.send_message(
+                member,
+                "The card is."
+            )
+            await self.bot.send_message(
+                member,
+                embed=utils.get_embed(card)
+            )
 
     def get_player(self, user_id):
         return self.bot.get_server(self.server_id).get_member(user_id)
@@ -130,12 +140,20 @@ class TabooGame:
         return result
 
     def get_watcher_id(self) -> str:
-        index = self.players.index(self.clue_giver) + 3
+        index = self.players.index(self.giver) + 3
         if index >= len(self.players):
             index -= len(self.players)
         return self.players[index]
 
-    async def guess(self, word):
+    async def guess(self, word, author_id):
+        if author_id == self.giver:
+            return
+
+        team = self.team_a if self.giver in self.team_a else self.team_b
+
+        if author_id not in team:
+            return
+
         word = word.upper().strip()
 
         if editdistance.eval(word, self.current_card[0]) < 2:
@@ -163,14 +181,14 @@ class TabooGame:
 
         if self.rounds:
             self.current_card = self.cards.pop()
-            self.clue_giver = self.turns.pop()
-            self.watcher = self.get_watcher_id()
+            self.giver = self.turns.pop(0)
 
-            description = 'Now is Team\'s {} turn.'.format(
-                'A' if self.clue_giver in self.team_a else 'B'
+            description = 'Is Team\'s {} turn.'.format(
+                'A' if self.giver in self.team_a else 'B'
             )
 
-            # TODO - finish message
+            description += "\n<@{}> is the **giver**.".format(self.giver)
+
             await self.bot.send_message(
                 self.channel,
                 embed=utils.get_embed(
@@ -180,18 +198,25 @@ class TabooGame:
 
             await self.dm_current_card()
 
+            await self.bot.send_message(
+                self.channel,
+                utils.get_embed(
+                    "The card was\n" + self.format_card(self.current_card)
+                )
+            )
+
     def remove_player(self, player: str):
         if player in self.players:
             self.players.remove(player)
 
     def score(self, opposite: bool=False):
         if opposite:
-            if self.clue_giver in self.team_a:
+            if self.giver in self.team_a:
                 self.team_b_score += 1
             else:
                 self.team_a_score += 1
         else:
-            if self.clue_giver in self.team_a:
+            if self.giver in self.team_a:
                 self.team_a_score += 1
             else:
                 self.team_b_score += 1
@@ -251,15 +276,20 @@ class TabooGame:
                     else:
                         self.team_b.append(player)
                 self.turns = self.players[:]
-                self.clue_giver = self.turns.pop()
-                self.watcher = self.get_watcher_id()
+                self.giver = self.turns.pop(0)
 
-                await  self.dm_current_card()
+                await self.dm_current_card()
 
-                embed = Embed(title='Game has started', color=Color.magenta())
+                description = 'Is Team\'s {} turn.'.format(
+                    'A' if self.giver in self.team_a else 'B'
+                )
+
+                description += "\n<@{}> is the **giver**.".format(self.giver)
+
+                embed = Embed(description=description, title='Game has started',
+                              color=Color.magenta())
                 embed.add_field(name='Team A', value=self.get_team('a'))
                 embed.add_field(name='Team B', value=self.get_team('b'))
-                # TODO - finish message
                 await self.bot.send_message(
                     self.channel,
                     embed=embed
@@ -282,16 +312,16 @@ class TabooGame:
                         self.queue.put_nowait(TabooMsg(TabooMsg.Type.start))
             else:
 
-                # Inactive time
-                if message.type == TabooMsg.Type.none:
-                    inactive_time += 0.01
-                    if inactive_time > 60:
-                        await self.bot.send_message(
-                            self.channel, embed=utils.get_embed("Game canceled due to inactivity.")
-                        )
-                        break
-                else:
-                    inactive_time = 0
+                # # Inactive time
+                # if message.type == TabooMsg.Type.none:
+                #     inactive_time += 0.01
+                #     if inactive_time > self.seconds:
+                #         await self.bot.send_message(
+                #             self.channel, embed=utils.get_embed("Game canceled due to inactivity.")
+                #         )
+                #         break
+                # else:
+                #     inactive_time = 0
 
                 # Next turn
                 if time > self.seconds:
@@ -300,19 +330,20 @@ class TabooGame:
 
                 # Guess card
                 elif message.type == TabooMsg.Type.guess:
-                    if (self.clue_giver in self.team_a and message.author in self.team_a) or\
-                       (self.clue_giver in self.team_b and message.author in self.team_b):
-                        await self.guess(message.content)
+                    if (self.giver in self.team_a and message.author in self.team_a) or\
+                       (self.giver in self.team_b and message.author in self.team_b):
+                        await self.guess(message.content, message.author)
 
                 # Skip card
                 elif message.type == TabooMsg.Type.skip_card:
-                    if self.clue_giver == message.author:
+                    if self.giver == message.author:
                         await self.skip_card()
                         await self.dm_current_card()
 
                 # Buzz
                 elif message.type == TabooMsg.Type.buzz:
-                    if self.watcher == message.author:
+                    team = self.team_a if self.giver not in self.team_b else self.team_b
+                    if message.author in team:
                         await self.buzz(message.content)
 
                 # Game Over
@@ -353,7 +384,7 @@ class Taboo:
             if server_id in self.games and guess:
                 self.games[server_id].queue.put_nowait(
                     TabooMsg(
-                        TabooMsg.Type.buzz,
+                        TabooMsg.Type.guess,
                         guess,
                         context.message.author.id
                     )
